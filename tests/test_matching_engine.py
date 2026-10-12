@@ -72,3 +72,76 @@ def test_time_priority_at_same_price():
 
     assert [trade.sell_order_id for trade in trades] == [1, 2]
     assert [trade.quantity for trade in trades] == [3, 1]
+    
+def test_one_buy_matches_multiple_sellers():
+    engine = MatchingEngine()
+
+    engine.add_order(make_order(1, Side.SELL, 100, 3, 1))
+    engine.add_order(make_order(2, Side.SELL, 101, 4, 2))
+
+    trades = engine.add_order(make_order(3, Side.BUY, 105, 5, 3))
+
+    assert len(trades) == 2
+    assert trades[0].sell_order_id == 1
+    assert trades[0].quantity == 3
+    assert trades[1].sell_order_id == 2
+    assert trades[1].quantity == 2
+    assert engine.sell_orders[0].quantity == 2
+    assert engine.buy_orders == []
+
+
+def test_highest_priced_buy_has_priority():
+    engine = MatchingEngine()
+
+    engine.add_order(make_order(1, Side.BUY, 100, 3, 1))
+    engine.add_order(make_order(2, Side.BUY, 105, 3, 2))
+
+    trades = engine.add_order(make_order(3, Side.SELL, 100, 4, 3))
+
+    assert len(trades) == 2
+    assert trades[0].buy_order_id == 2
+    assert trades[0].quantity == 3
+    assert trades[1].buy_order_id == 1
+    assert trades[1].quantity == 1
+
+
+def test_fully_filled_incoming_order_is_not_added_to_book():
+    engine = MatchingEngine()
+
+    engine.add_order(make_order(1, Side.SELL, 100, 5, 1))
+    incoming = make_order(2, Side.BUY, 100, 5, 2)
+
+    trades = engine.add_order(incoming)
+
+    assert sum(trade.quantity for trade in trades) == 5
+    assert incoming.quantity == 0
+    assert engine.buy_orders == []
+    assert engine.sell_orders == []
+
+import pytest
+
+
+def test_invalid_order_is_rejected():
+    engine = MatchingEngine()
+
+    invalid_order = make_order(1, Side.BUY, 100, 0, 1)
+
+    with pytest.raises(ValueError, match="quantity must be positive"):
+        engine.add_order(invalid_order)
+
+    assert engine.buy_orders == []
+    assert engine.sell_orders == []
+
+
+def test_no_trade_when_prices_do_not_cross():
+    engine = MatchingEngine()
+
+    engine.add_order(make_order(1, Side.BUY, 100, 5, 1))
+    trades = engine.add_order(make_order(2, Side.SELL, 105, 3, 2))
+
+    assert trades == []
+    assert len(engine.buy_orders) == 1
+    assert len(engine.sell_orders) == 1
+    assert engine.buy_orders[0].quantity == 5
+    assert engine.sell_orders[0].quantity == 3
+
