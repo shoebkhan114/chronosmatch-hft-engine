@@ -35,6 +35,52 @@ class TestOrder(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             order.validate()
+    
+    def test_invalid_order_id(self):
+        order = Order(
+            order_id=0,
+            timestamp_ns=1000,
+            side=Side.BUY,
+            price_ticks=25000,
+            quantity=10,
+        )
+        with self.assertRaises(ValueError):
+            order.validate()
+
+    def test_negative_timestamp(self):
+        order = Order(
+            order_id=1,
+            timestamp_ns=-1,
+            side=Side.BUY,
+            price_ticks=25000,
+            quantity=10,
+        )
+        with self.assertRaises(ValueError):
+            order.validate()
+
+    def test_invalid_side(self):
+        order = Order(
+            order_id=1,
+            timestamp_ns=1000,
+            side=99,
+            price_ticks=25000,
+            quantity=10,
+        )
+        with self.assertRaises(ValueError):
+            order.validate()
+
+    def test_invalid_order_type(self):
+        order = Order(
+            order_id=1,
+            timestamp_ns=1000,
+            side=Side.BUY,
+            price_ticks=25000,
+            quantity=10,
+            order_type=99,
+        )
+        with self.assertRaises(ValueError):
+            order.validate()
+        
 
 
 if __name__ == "__main__":
