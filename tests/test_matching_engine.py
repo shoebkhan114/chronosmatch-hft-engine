@@ -1,5 +1,5 @@
 
-from src.models import Order, Side
+from src.models import Order, Side, OrderType
 from src.matching_engine import MatchingEngine
 
 
@@ -145,3 +145,44 @@ def test_no_trade_when_prices_do_not_cross():
     assert engine.buy_orders[0].quantity == 5
     assert engine.sell_orders[0].quantity == 3
 
+def test_buy_orders_follow_time_priority_at_same_price():
+    engine = MatchingEngine()
+
+    # Both buy orders have the same price.
+    engine.add_order(make_order(1, Side.BUY, 100, 3, 10))
+    engine.add_order(make_order(2, Side.BUY, 100, 3, 20))
+
+    # This sell order can match both buy orders.
+    trades = engine.add_order(make_order(3, Side.SELL, 100, 4, 30))
+
+    # The earlier buy order must be filled first.
+    assert len(trades) == 2
+    assert trades[0].buy_order_id == 1
+    assert trades[0].quantity == 3
+    assert trades[1].buy_order_id == 2
+    assert trades[1].quantity == 1
+
+    # The second buy order has two units remaining.
+    assert len(engine.buy_orders) == 1
+    assert engine.buy_orders[0].order_id == 2
+    assert engine.buy_orders[0].quantity == 2
+def test_market_orders_are_not_supported():
+    engine = MatchingEngine()
+
+    market_order = Order(
+        order_id=1,
+        timestamp_ns=1,
+        side=Side.BUY,
+        price_ticks=100,
+        quantity=5,
+        order_type=OrderType.MARKET,
+    )
+
+    with pytest.raises(
+        NotImplementedError,
+        match="Market orders will be implemented after limit orders",
+    ):
+        engine.add_order(market_order)
+
+    assert engine.buy_orders == []
+    assert engine.sell_orders == []
