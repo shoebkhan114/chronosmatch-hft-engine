@@ -14,10 +14,24 @@ class Trade:
 
 
 class MatchingEngine:
+    """Limit-order matching engine.
+
+    Matching mutates Order.quantity in place to represent remaining quantity.
+    MARKET orders are currently unsupported.
+
+    Orders are prioritized by price, timestamp_ns, then engine arrival
+    sequence. Duplicate accepted order IDs are rejected for the engine's
+    lifetime, including IDs of fully filled orders.
+    """
+
     def __init__(self):
         self.buy_orders: List[Order] = []
         self.sell_orders: List[Order] = []
         self.trades: List[Trade] = []
+
+        self._seen_order_ids = set()
+        self._arrival_sequence_by_order_id = {}
+        self._next_arrival_sequence = 0
 
     def add_order(self, order: Order) -> List[Trade]:
         order.validate()
@@ -26,6 +40,16 @@ class MatchingEngine:
             raise NotImplementedError(
                 "Market orders will be implemented after limit orders."
             )
+
+        if order.order_id in self._seen_order_ids:
+            raise ValueError(f"Duplicate order_id: {order.order_id}")
+
+        # Record every accepted order, even if it fills immediately.
+        self._seen_order_ids.add(order.order_id)
+        self._arrival_sequence_by_order_id[order.order_id] = (
+            self._next_arrival_sequence
+        )
+        self._next_arrival_sequence += 1
 
         new_trades = []
 
@@ -64,6 +88,7 @@ class MatchingEngine:
             new_trades.append(trade)
             self.trades.append(trade)
 
+            # Mutate original Order objects to track remaining quantities.
             order.quantity -= traded_quantity
             best.quantity -= traded_quantity
 
@@ -74,12 +99,20 @@ class MatchingEngine:
             if order.side == Side.BUY:
                 self.buy_orders.append(order)
                 self.buy_orders.sort(
-                    key=lambda o: (-o.price_ticks, o.timestamp_ns)
+                    key=lambda o: (
+                        -o.price_ticks,
+                        o.timestamp_ns,
+                        self._arrival_sequence_by_order_id[o.order_id],
+                    )
                 )
             else:
                 self.sell_orders.append(order)
                 self.sell_orders.sort(
-                    key=lambda o: (o.price_ticks, o.timestamp_ns)
+                    key=lambda o: (
+                        o.price_ticks,
+                        o.timestamp_ns,
+                        self._arrival_sequence_by_order_id[o.order_id],
+                    )
                 )
 
         return new_trades

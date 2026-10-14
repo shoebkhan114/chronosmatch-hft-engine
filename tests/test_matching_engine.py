@@ -1,4 +1,5 @@
 
+import pytest
 from src.models import Order, Side, OrderType
 from src.matching_engine import MatchingEngine
 
@@ -186,3 +187,79 @@ def test_market_orders_are_not_supported():
 
     assert engine.buy_orders == []
     assert engine.sell_orders == []
+
+def test_duplicate_order_id_is_rejected():
+    engine = MatchingEngine()
+
+    engine.add_order(make_order(1, Side.SELL, 100, 5, 1))
+
+    with pytest.raises(ValueError, match="Duplicate order_id"):
+        engine.add_order(make_order(1, Side.BUY, 100, 5, 2))
+
+    assert len(engine.sell_orders) == 1
+    assert engine.sell_orders[0].quantity == 5
+    assert engine.buy_orders == []
+
+
+def test_duplicate_id_rejected_after_original_order_is_filled():
+    engine = MatchingEngine()
+
+    original = make_order(1, Side.SELL, 100, 2, 1)
+    engine.add_order(original)
+    engine.add_order(make_order(2, Side.BUY, 100, 2, 2))
+
+    assert original.quantity == 0
+
+    with pytest.raises(ValueError, match="Duplicate order_id"):
+        engine.add_order(make_order(1, Side.SELL, 100, 3, 3))
+
+
+def test_equal_timestamps_preserve_arrival_order():
+    engine = MatchingEngine()
+
+    engine.add_order(make_order(1, Side.SELL, 100, 3, 10))
+    engine.add_order(make_order(2, Side.SELL, 100, 3, 10))
+
+    trades = engine.add_order(make_order(3, Side.BUY, 100, 4, 20))
+
+    assert [trade.sell_order_id for trade in trades] == [1, 2]
+    assert [trade.quantity for trade in trades] == [3, 1]
+    assert engine.sell_orders[0].order_id == 2
+    assert engine.sell_orders[0].quantity == 2
+
+
+def test_matching_mutates_original_order_quantities():
+    engine = MatchingEngine()
+
+    resting_sell = make_order(1, Side.SELL, 100, 10, 1)
+    incoming_buy = make_order(2, Side.BUY, 100, 4, 2)
+
+    engine.add_order(resting_sell)
+    engine.add_order(incoming_buy)
+
+    assert resting_sell.quantity == 6
+    assert incoming_buy.quantity == 0
+
+
+def test_market_orders_are_not_supported():
+    engine = MatchingEngine()
+
+    market_order = Order(
+        order_id=1,
+        timestamp_ns=1,
+        side=Side.BUY,
+        price_ticks=100,
+        quantity=5,
+        order_type=OrderType.MARKET,
+    )
+
+    with pytest.raises(
+        NotImplementedError,
+        match="Market orders will be implemented after limit orders",
+    ):
+        engine.add_order(market_order)
+
+    assert engine.buy_orders == []
+    assert engine.sell_orders == []
+    assert engine.trades == []
+
