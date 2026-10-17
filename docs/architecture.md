@@ -26,4 +26,10 @@ Market Simulator → Shared-Memory Ring Buffer → Matching Engine → Metrics a
 
 ## 5. Current Status
 
-Initial repository and branch setup completed. Module interfaces and implementation are in progress.
+- Initial repository and branch setup completed.
+- Common Order model implemented with validation.
+- Fixed-capacity mmap-based ring buffer prototype implemented using struct-based binary order records.
+- Single-process ring buffer tests cover empty, full, FIFO, put/get, and wrap-around behavior.
+- Separate producer-consumer process communication tested with 100 orders.
+- All 13 current automated tests pass.
+- High-throughput benchmarking, crash recovery, and broader concurrency testing remain pending.
