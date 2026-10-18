@@ -7,7 +7,7 @@ My contribution to the project focuses on researching and inspecting the stock m
 ### 1. Dataset Used
 
 - **Dataset name:** NIFTY-50 Stock Market Data
-- **Source:** [Kaggle — NIFTY-50 Stock Market Data]((https://www.kaggle.com/datasets/rohanrao/nifty50-stock-market-data?select=NIFTY50_all.csv))
+- **Source:** [Kaggle — NIFTY-50 Stock Market Data]([https://www.kaggle.com/datasets/rohanrao/nifty50-stock-market-data?select=NIFTY50_all.csv])
 - **File name:** `NIFTY50_all.csv`
 - **Format:** CSV
 - **Total records:** 235,192
