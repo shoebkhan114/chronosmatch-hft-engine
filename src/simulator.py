@@ -1,11 +1,18 @@
+
 import asyncio
 import pandas as pd
 import random
 import time
 
+from src.models import Order, Side, OrderType
+
+TICK_SIZE_INR = 0.01
+
+
 class MarketSimulator:
-    def __init__(self, dataset_path="data/NIFTY50_all.csv"):
+    def __init__(self, dataset_path="data/NIFTY50_all.csv", symbol="RELIANCE"):
         self.dataset_path = dataset_path
+        self.symbol = symbol
         self.market_data = None
 
     def load_data(self):
@@ -15,38 +22,54 @@ class MarketSimulator:
             self.market_data["Date"]
         )
 
+        self.market_data = self.market_data[
+            self.market_data["Symbol"] == self.symbol
+        ]
+
         self.market_data = self.market_data.dropna(
             subset=["Open", "High", "Low", "Close", "Volume"]
         )
 
+        if self.market_data.empty:
+            raise ValueError(
+                f"No valid market data found for symbol: {self.symbol}"
+            )
+
         return self.market_data
-    
+
     def generate_order(self, row, order_id):
-        side = random.choice(["BUY", "SELL"])
+        side = random.choice([Side.BUY, Side.SELL])
 
-        if side == "BUY":
-            price = row["Close"] * 1.001
+        if side == Side.BUY:
+            price = float(row["Close"]) * 1.001
         else:
-            price = row["Close"] * 0.999
+            price = float(row["Close"]) * 0.999
 
-        return {
-            "order_id": order_id,
-            "timestamp_ns": time.time_ns(),
-            "side": side,
-            "price": round(price, 2),
-            "quantity": random.randint(1, 100),
-            "symbol": row["Symbol"],
-        }
+        price_ticks = round(price / TICK_SIZE_INR)
+
+        order = Order(
+            order_id=order_id,
+            timestamp_ns=time.time_ns(),
+            side=side,
+            price_ticks=price_ticks,
+            quantity=random.randint(1, 100),
+            order_type=OrderType.LIMIT,
+        )
+
+        order.validate()
+        return order
 
     async def generate_orders(self, delay=0.01):
+        if delay < 0:
+            raise ValueError("delay cannot be negative")
+
         if self.market_data is None:
             self.load_data()
 
-        order_id = 1
+        for order_id, (_, row) in enumerate(
+            self.market_data.iterrows(), start=1
+        ):
+            yield self.generate_order(row, order_id)
 
-        for _, row in self.market_data.iterrows():
-            order = self.generate_order(row, order_id)
-            yield order
-
-            order_id += 1
-            await asyncio.sleep(delay)   
+            if delay > 0:
+                await asyncio.sleep(delay)
