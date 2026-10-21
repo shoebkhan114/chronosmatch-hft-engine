@@ -14,10 +14,11 @@ All numbers are single runs. Do not compare different workloads.
 
 ## Matching engine, in-memory (no ring buffer)
 - Immediate trades (small book): ~376,981 orders/sec
-- Growing book (BUY only): ~10,199 orders/sec at 1,000 orders, ~1,032 orders/sec at 10,000 orders
+- Growing book (BUY only), before optimization (list.sort per insert): ~10,199 orders/sec at 1,000 orders, ~1,032 orders/sec at 10,000 orders
+- Growing book (BUY only), after bisect.insort (commit 7d2e785): ~300,982 orders/sec at 1,000 orders, ~134,001 orders/sec at 10,000 orders (single run)
 - add_order latency, immediate-trade workload: median 1.46 us, p99 2.80 us, p99.9 40.44 us, max 1,178.99 us
 - Command: `PYTHONPATH=. python benchmarks/benchmark_matching_engine.py`
-- Cause of growing-book slowdown: the book list is re-sorted on every insert.
+- Cause of the original slowdown: the book list was re-sorted on every insert. insort removes that; mid-list insert is still O(n), so throughput still falls as the book grows.
 
 ## Not measured yet
 - End-to-end order-to-trade latency (ring buffer + engine together).
