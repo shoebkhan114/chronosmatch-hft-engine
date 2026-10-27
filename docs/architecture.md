@@ -38,7 +38,8 @@ Market Simulator -> Shared-Memory Ring Buffer -> Matching Engine -> Metrics and 
 
 - External synchronization: independent processes must share the same multiprocessing-compatible lock. The default threading lock is not sufficient for process synchronization.
 - No crash recovery: unexpected process termination during an operation may leave the buffer in an inconsistent state; automatic recovery is not implemented.
-- Fixed capacity: new orders are rejected when the buffer is full until space becomes available.
+- Full-buffer behaviour: `put()` returns `False` when the buffer is full. Existing unread orders are preserved, and new orders can be accepted after space becomes available.
+- Benchmark result: approximately 172,489 orders/second was measured in a single run on the developer's laptop with 100,000 orders. This is a single-run result, not a repeated benchmark or a production performance guarantee.
 - Shared file requirements: processes must use the same backing file, capacity, and binary record format.
 - Performance scope: benchmark results depend on the machine and workload and do not guarantee production trading performance.
 
