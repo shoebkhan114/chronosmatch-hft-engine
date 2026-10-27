@@ -90,8 +90,29 @@ class TestRingBuffer(unittest.TestCase):
     def test_full_buffer(self):
         self.assertTrue(self.buffer.put(self.make_order(1)))
         self.assertTrue(self.buffer.put(self.make_order(2)))
+
+        # Third order should be rejected because the buffer is full.
         self.assertFalse(self.buffer.put(self.make_order(3)))
 
+        # The first two orders must still be there.
+        self.assertEqual(self.buffer.get().order_id, 1)
+        self.assertEqual(self.buffer.get().order_id, 2)
+
+        # After freeing space, a new order should be accepted.
+        self.assertTrue(self.buffer.put(self.make_order(3)))
+        self.assertEqual(self.buffer.get().order_id, 3)
+
+    def test_corrupted_binary_record(self):
+        self.assertTrue(self.buffer.put(self.make_order(1)))
+
+        # Corrupt the side field in the stored binary record.
+        record_offset = 24
+        side_offset = record_offset + 16
+        self.buffer.memory[side_offset] = 255
+
+        with self.assertRaises(ValueError):
+            self.buffer.get()
+            
     def test_fifo_order(self):
         self.buffer.put(self.make_order(1))
         self.buffer.put(self.make_order(2))
