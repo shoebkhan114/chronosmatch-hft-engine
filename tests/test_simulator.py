@@ -2,6 +2,7 @@
 import asyncio
 
 import pandas as pd
+import pytest
 
 from src.models import Order, OrderType, Side
 from src.simulator import MarketSimulator, TICK_SIZE_INR
@@ -100,7 +101,7 @@ def test_price_tick_conversion():
 
 
 def test_generate_orders_without_delay():
-    """Check that zero delay works and only the selected stock is used."""
+    """Check zero delay and selected-stock filtering."""
 
     async def run_test():
         simulator = MarketSimulator(symbol="RELIANCE")
@@ -118,5 +119,48 @@ def test_generate_orders_without_delay():
         assert len(orders) == 2
         assert all(isinstance(order, Order) for order in orders)
         assert [order.order_id for order in orders] == [1, 2]
+
+    asyncio.run(run_test())
+
+
+def test_generate_random_orders_without_dataset():
+    """Check random order generation without reading a CSV."""
+
+    async def run_test():
+        simulator = MarketSimulator(
+            dataset_path="file_does_not_need_to_exist.csv"
+        )
+
+        orders = [
+            order
+            async for order in simulator.generate_random_orders(
+                count=100
+            )
+        ]
+
+        assert len(orders) == 100
+        assert all(isinstance(order, Order) for order in orders)
+        assert [order.order_id for order in orders] == list(
+            range(1, 101)
+        )
+        assert all(order.price_ticks > 0 for order in orders)
+
+        # The random mode must not load the dataset.
+        assert simulator.market_data is None
+
+    asyncio.run(run_test())
+
+
+def test_generate_random_orders_rejects_invalid_count():
+    """Check that an invalid order count raises ValueError."""
+
+    async def run_test():
+        simulator = MarketSimulator()
+
+        with pytest.raises(
+            ValueError, match="count must be at least 1"
+        ):
+            async for _ in simulator.generate_random_orders(count=0):
+                pass
 
     asyncio.run(run_test())
