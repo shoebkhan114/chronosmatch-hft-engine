@@ -20,6 +20,12 @@ All numbers are single runs. Do not compare different workloads.
 - Command: `PYTHONPATH=. python benchmarks/benchmark_matching_engine.py`
 - Cause of the original slowdown: the book list was re-sorted on every insert. insort removes that; mid-list insert is still O(n), so throughput still falls as the book grows.
 
+## Ring buffer, 1,000,000-order cross-process test (mid-review requirement)
+- Scope: Ajay's cross-process benchmark run with ORDER_COUNT = 1,000,000 (ring buffer only, no matching engine), capacity 1,024, spawn context with shared lock. Consumer verified strictly increasing order IDs (FIFO integrity); no errors.
+- Result (single run, one laptop): 1,000,000 sent, 1,000,000 received, 3.968 seconds, about 252,008 orders/sec.
+- Not claimed: zero-copy, end-to-end throughput, or repeatability (single run).
+- Command: `PYTHONPATH=. python -c "import benchmarks.benchmark_multiprocess_ring_buffer as b; b.ORDER_COUNT = 1_000_000; b.PROCESS_TIMEOUT = 300; b.main()"`
+
 ## End-to-end pipeline (producer -> ring buffer -> engine, 2 processes)
 - Scope: synthetic seeded random-walk LIMIT orders (not the NIFTY dataset), 100,000 orders, 92,796 trades, ring buffer capacity 1,024, spawn context with shared lock, FIFO order verified in the consumer. Python 3.12.3, x86_64 Linux, one laptop (Inspiron 15 3520). Five single runs, same machine, not controlled for CPU frequency or background load.
 - Consumer-window throughput across runs: 38,740 / 42,813 / 50,357 / 64,182 / 92,030 orders/sec. The spread is about 2.4x, so no single number is representative.
