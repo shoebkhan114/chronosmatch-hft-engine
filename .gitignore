@@ -221,3 +221,5 @@ __marimo__/
 
 # Local datasets (never commit)
 data/
+src/*.so
+src/*.c
