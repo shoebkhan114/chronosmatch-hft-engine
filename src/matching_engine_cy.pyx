@@ -1,17 +1,39 @@
 
-from bisect import insort
+from bisect import bisect_right
 from dataclasses import dataclass
 from typing import List
 
 from src.models import Order, Side, OrderType
 
 
-@dataclass(slots=True)
-class Trade:
-    buy_order_id: int
-    sell_order_id: int
-    price_ticks: int
-    quantity: int
+cdef class Trade:
+    cdef public unsigned long long buy_order_id
+    cdef public unsigned long long sell_order_id
+    cdef public unsigned long long price_ticks
+    cdef public unsigned long long quantity
+
+    def __init__(self, buy_order_id, sell_order_id, price_ticks, quantity):
+        self.buy_order_id = buy_order_id
+        self.sell_order_id = sell_order_id
+        self.price_ticks = price_ticks
+        self.quantity = quantity
+
+    def __repr__(self):
+        return (
+            f"Trade(buy_order_id={self.buy_order_id}, "
+            f"sell_order_id={self.sell_order_id}, "
+            f"price_ticks={self.price_ticks}, quantity={self.quantity})"
+        )
+
+    def __eq__(self, other):
+        if not isinstance(other, Trade):
+            return NotImplemented
+        return (
+            self.buy_order_id == other.buy_order_id
+            and self.sell_order_id == other.sell_order_id
+            and self.price_ticks == other.price_ticks
+            and self.quantity == other.quantity
+        )
 
 
 class MatchingEngine:
@@ -29,6 +51,8 @@ class MatchingEngine:
         self.buy_orders: List[Order] = []
         self.sell_orders: List[Order] = []
         self.trades: List[Trade] = []
+        self._buy_keys = []
+        self._sell_keys = []
 
         self._seen_order_ids = set()
         self._arrival_sequence_by_order_id = {}
@@ -56,8 +80,10 @@ class MatchingEngine:
 
         if order.side == Side.BUY:
             opposite_orders = self.sell_orders
+            opposite_keys = self._sell_keys
         else:
             opposite_orders = self.buy_orders
+            opposite_keys = self._buy_keys
 
         while order.quantity > 0 and opposite_orders:
             best = opposite_orders[0]
@@ -95,27 +121,19 @@ class MatchingEngine:
 
             if best.quantity == 0:
                 opposite_orders.pop(0)
+                opposite_keys.pop(0)
 
         if order.quantity > 0:
+            seq = self._arrival_sequence_by_order_id[order.order_id]
             if order.side == Side.BUY:
-                insort(
-                    self.buy_orders,
-                    order,
-                    key=lambda o: (
-                        -o.price_ticks,
-                        o.timestamp_ns,
-                        self._arrival_sequence_by_order_id[o.order_id],
-                    ),
-                )
+                key = (-order.price_ticks, order.timestamp_ns, seq)
+                pos = bisect_right(self._buy_keys, key)
+                self._buy_keys.insert(pos, key)
+                self.buy_orders.insert(pos, order)
             else:
-                insort(
-                    self.sell_orders,
-                    order,
-                    key=lambda o: (
-                        o.price_ticks,
-                        o.timestamp_ns,
-                        self._arrival_sequence_by_order_id[o.order_id],
-                    ),
-                )
+                key = (order.price_ticks, order.timestamp_ns, seq)
+                pos = bisect_right(self._sell_keys, key)
+                self._sell_keys.insert(pos, key)
+                self.sell_orders.insert(pos, order)
 
         return new_trades
