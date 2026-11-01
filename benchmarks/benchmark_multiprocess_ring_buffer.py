@@ -1,4 +1,3 @@
-
 import multiprocessing
 import os
 import tempfile
@@ -8,13 +7,14 @@ from src.models import Order, Side, OrderType
 from src.ring_buffer import RingBuffer
 
 
-ORDER_COUNT = 100_000
+ORDER_COUNT = 1_000_000
 CAPACITY = 1024
-PROCESS_TIMEOUT = 120
+PROCESS_TIMEOUT = 300
 
 
-def producer_process(path, capacity, lock, order_count):
+def producer_process(path, capacity, lock, order_count, result_queue):
     buffer = RingBuffer(path, capacity, lock=lock)
+    full_retries = 0
 
     try:
         for i in range(order_count):
@@ -28,7 +28,11 @@ def producer_process(path, capacity, lock, order_count):
             )
 
             while not buffer.put(order):
+                full_retries += 1
                 time.sleep(0)
+
+        result_queue.put({"full_retries": full_retries})
+
     finally:
         buffer.close()
 
@@ -55,9 +59,11 @@ def consumer_process(path, capacity, lock, order_count, result_queue):
             received += 1
 
         result_queue.put({"received": received})
+
     except Exception as exc:
-        result_queue.put({"error": repr(exc)})
+        result_queue.put({"consumer_error": repr(exc)})
         raise
+
     finally:
         buffer.close()
 
@@ -65,7 +71,8 @@ def consumer_process(path, capacity, lock, order_count, result_queue):
 def main():
     context = multiprocessing.get_context("spawn")
     lock = context.Lock()
-    result_queue = context.Queue()
+    producer_queue = context.Queue()
+    consumer_queue = context.Queue()
 
     with tempfile.TemporaryDirectory() as directory:
         path = os.path.join(directory, "benchmark.bin")
@@ -73,19 +80,19 @@ def main():
 
         producer = context.Process(
             target=producer_process,
-            args=(path, CAPACITY, lock, ORDER_COUNT),
+            args=(path, CAPACITY, lock, ORDER_COUNT, producer_queue),
         )
+
         consumer = context.Process(
             target=consumer_process,
-            args=(path, CAPACITY, lock, ORDER_COUNT, result_queue),
+            args=(path, CAPACITY, lock, ORDER_COUNT, consumer_queue),
         )
 
-        start = None
-
         try:
+            start = time.perf_counter()
+
             consumer.start()
             producer.start()
-            start = time.perf_counter()
 
             producer.join(PROCESS_TIMEOUT)
             consumer.join(PROCESS_TIMEOUT)
@@ -108,24 +115,35 @@ def main():
                     f"Consumer failed with exit code {consumer.exitcode}"
                 )
 
-            result = result_queue.get(timeout=5)
+            producer_result = producer_queue.get(timeout=5)
+            consumer_result = consumer_queue.get(timeout=5)
 
-            if "error" in result:
-                raise RuntimeError(result["error"])
+            if "consumer_error" in consumer_result:
+                raise RuntimeError(consumer_result["consumer_error"])
 
-            received = result["received"]
+            received = consumer_result["received"]
+            full_retries = producer_result["full_retries"]
+
             if received != ORDER_COUNT:
                 raise RuntimeError(
                     f"Expected {ORDER_COUNT} orders, received {received}"
                 )
 
+            if full_retries == 0:
+                raise RuntimeError("Buffer-full condition was not observed")
+
+            wraparounds = ORDER_COUNT // CAPACITY
+
             throughput = received / elapsed if elapsed > 0 else 0
 
             print(f"Orders sent: {ORDER_COUNT}")
             print(f"Orders received: {received}")
+            print(f"Full-buffer retries: {full_retries}")
+            print(f"Capacity: {CAPACITY}")
+            print(f"Write-position wraparounds: at least {wraparounds}")
             print(f"Elapsed time: {elapsed:.6f} seconds")
             print(f"Throughput: {throughput:.2f} orders/second")
-            print("Benchmark type: Cross-process producer/consumer")
+            print("Benchmark type: 1M cross-process producer/consumer")
 
         finally:
             for process in (producer, consumer):
@@ -134,8 +152,10 @@ def main():
                     process.join()
 
             creator.close()
-            result_queue.close()
-            result_queue.join_thread()
+            producer_queue.close()
+            consumer_queue.close()
+            producer_queue.join_thread()
+            consumer_queue.join_thread()
 
 
 if __name__ == "__main__":
