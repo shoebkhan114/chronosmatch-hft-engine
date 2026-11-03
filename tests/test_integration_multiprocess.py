@@ -1,4 +1,6 @@
 import multiprocessing
+
+import pytest
 import os
 import tempfile
 import time
@@ -174,6 +176,7 @@ def test_multiprocess_producer_consumer_to_engine():
 
 
 
+@pytest.mark.slow
 def test_multiprocess_one_million_orders_full_buffer_wraparound():
     context = multiprocessing.get_context("spawn")
     lock = context.Lock()
