@@ -112,7 +112,63 @@ class TestRingBuffer(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             self.buffer.get()
-            
+
+
+    def test_corrupted_order_type(self):
+        self.assertTrue(self.buffer.put(self.make_order(1)))
+
+        # The order_type field is the last byte of the record.
+        record_offset = 24
+        order_type_offset = record_offset + 29
+
+        # 255 is not a valid OrderType.
+        self.buffer.memory[order_type_offset] = 255
+
+        with self.assertRaises(ValueError):
+            self.buffer.get()
+
+
+    def test_corrupted_quantity_zero(self):
+        self.assertTrue(self.buffer.put(self.make_order(1)))
+
+        # Modify the stored quantity field to zero.
+        record_offset = 24
+        quantity_offset = record_offset + 25
+
+        # Quantity occupies 4 bytes.
+        self.buffer.memory[quantity_offset:quantity_offset + 4] = b"\x00" * 4
+
+        result = self.buffer.get()
+
+        # Current get() returns the corrupted value.
+        self.assertEqual(result.quantity, 0)
+
+        # The returned order fails normal validation.
+        with self.assertRaises(ValueError):
+            result.validate()
+
+
+    def test_corrupted_price_zero(self):
+        self.assertTrue(self.buffer.put(self.make_order(1)))
+
+        # Price starts 17 bytes after the record begins.
+        record_offset = 24
+        price_offset = record_offset + 17
+
+        # Replace the stored price with zero.
+        self.buffer.memory[price_offset:price_offset + 8] = b"\x00" * 8
+
+        result = self.buffer.get()
+
+        self.assertEqual(result.price_ticks, 0)
+
+        # Zero price is invalid according to Order.validate().
+        with self.assertRaises(ValueError):
+            result.validate()
+
+
+
+
     def test_fifo_order(self):
         self.buffer.put(self.make_order(1))
         self.buffer.put(self.make_order(2))
