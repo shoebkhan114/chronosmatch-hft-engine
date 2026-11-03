@@ -164,3 +164,82 @@ def test_generate_random_orders_rejects_invalid_count():
                 pass
 
     asyncio.run(run_test())
+
+
+def test_generate_random_orders_same_seed():
+    """Same seed should produce identical random order data."""
+
+    async def run_test():
+        simulator = MarketSimulator()
+
+        orders1 = [
+            order async for order in simulator.generate_random_orders(
+                count=100, seed=42
+            )
+        ]
+
+        orders2 = [
+            order async for order in simulator.generate_random_orders(
+                count=100, seed=42
+            )
+        ]
+
+        data1 = [(o.side, o.price_ticks, o.quantity) for o in orders1]
+        data2 = [(o.side, o.price_ticks, o.quantity) for o in orders2]
+
+        assert data1 == data2
+
+    asyncio.run(run_test())
+
+
+def test_generate_random_orders_different_seeds():
+    """Different seeds should produce different random order data."""
+
+    async def run_test():
+        simulator = MarketSimulator()
+
+        orders1 = [
+            order async for order in simulator.generate_random_orders(
+                count=100, seed=42
+            )
+        ]
+
+        orders2 = [
+            order async for order in simulator.generate_random_orders(
+                count=100, seed=99
+            )
+        ]
+
+        data1 = [(o.side, o.price_ticks, o.quantity) for o in orders1]
+        data2 = [(o.side, o.price_ticks, o.quantity) for o in orders2]
+
+        assert data1 != data2
+
+    asyncio.run(run_test())
+
+
+def test_generate_random_orders_yields_to_event_loop():
+    """Other asynchronous tasks should run during order generation."""
+
+    async def run_test():
+        simulator = MarketSimulator()
+        background_task_ran = False
+
+        async def background_task():
+            nonlocal background_task_ran
+            background_task_ran = True
+
+        task = asyncio.create_task(background_task())
+
+        index = 0
+
+        async for _ in simulator.generate_random_orders(count=2000):
+            index += 1
+
+            if index == 1001:
+                assert background_task_ran
+
+        await task
+        assert background_task_ran
+
+    asyncio.run(run_test())
