@@ -1,4 +1,5 @@
 
+from bisect import insort
 from dataclasses import dataclass
 from typing import List
 
@@ -97,22 +98,24 @@ class MatchingEngine:
 
         if order.quantity > 0:
             if order.side == Side.BUY:
-                self.buy_orders.append(order)
-                self.buy_orders.sort(
+                insort(
+                    self.buy_orders,
+                    order,
                     key=lambda o: (
                         -o.price_ticks,
                         o.timestamp_ns,
                         self._arrival_sequence_by_order_id[o.order_id],
-                    )
+                    ),
                 )
             else:
-                self.sell_orders.append(order)
-                self.sell_orders.sort(
+                insort(
+                    self.sell_orders,
+                    order,
                     key=lambda o: (
                         o.price_ticks,
                         o.timestamp_ns,
                         self._arrival_sequence_by_order_id[o.order_id],
-                    )
+                    ),
                 )
 
         return new_trades

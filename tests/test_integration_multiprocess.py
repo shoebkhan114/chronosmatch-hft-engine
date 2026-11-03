@@ -1,4 +1,6 @@
 import multiprocessing
+
+import pytest
 import os
 import tempfile
 import time
@@ -65,6 +67,68 @@ def consumer_process(path, capacity, lock, result_queue):
         buffer.close()
 
 
+def stress_producer(path, capacity, lock, order_count, result_queue):
+    buffer = RingBuffer(path, capacity, lock=lock)
+    full_retries = 0
+
+    try:
+        for i in range(order_count):
+            order = Order(
+                i + 1,
+                time.perf_counter_ns(),
+                Side.BUY,
+                PRICE,
+                QTY,
+                OrderType.LIMIT,
+            )
+
+            while not buffer.put(order):
+                full_retries += 1
+                time.sleep(0)
+
+        result_queue.put({"full_retries": full_retries})
+
+    finally:
+        buffer.close()
+
+
+def stress_consumer(path, capacity, lock, order_count, result_queue):
+    buffer = RingBuffer(path, capacity, lock=lock)
+    received = 0
+    last_order_id = 0
+
+    try:
+        deadline = time.monotonic() + 300
+
+        while received < order_count:
+            order = buffer.get()
+
+            if order is None:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("Consumer timed out")
+                time.sleep(0)
+                continue
+
+            if order.order_id != last_order_id + 1:
+                raise AssertionError(
+                    f"Expected order {last_order_id + 1}, "
+                    f"received {order.order_id}"
+                )
+
+            last_order_id = order.order_id
+            received += 1
+
+        result_queue.put({"received": received})
+
+    except Exception as exc:
+        result_queue.put({"error": repr(exc)})
+        raise
+
+    finally:
+        buffer.close()
+
+
+
 def test_multiprocess_producer_consumer_to_engine():
     context = multiprocessing.get_context("spawn")
     lock = context.Lock()
@@ -109,3 +173,65 @@ def test_multiprocess_producer_consumer_to_engine():
             assert result["sell_left"] == 0
         finally:
             creator.close()
+
+
+
+@pytest.mark.slow
+def test_multiprocess_one_million_orders_full_buffer_wraparound():
+    context = multiprocessing.get_context("spawn")
+    lock = context.Lock()
+
+    producer_queue = context.Queue()
+    consumer_queue = context.Queue()
+
+    order_count = 1_000_000
+    capacity = 1024
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        path = os.path.join(temp_dir, "stress_ring.bin")
+        creator = RingBuffer(path, capacity, create=True, lock=lock)
+
+        producer = context.Process(
+            target=stress_producer,
+            args=(path, capacity, lock, order_count, producer_queue),
+        )
+        consumer = context.Process(
+            target=stress_consumer,
+            args=(path, capacity, lock, order_count, consumer_queue),
+        )
+
+        try:
+            consumer.start()
+            producer.start()
+
+            producer.join(300)
+            consumer.join(300)
+
+            for process in (producer, consumer):
+                if process.is_alive():
+                    process.terminate()
+                    process.join()
+                    raise AssertionError("Stress test process timed out")
+
+            assert producer.exitcode == 0
+            assert consumer.exitcode == 0
+
+            producer_result = producer_queue.get(timeout=5)
+            consumer_result = consumer_queue.get(timeout=5)
+
+            assert "error" not in consumer_result, consumer_result
+            assert consumer_result["received"] == order_count
+            assert producer_result["full_retries"] > 0
+            assert order_count // capacity >= 900
+
+        finally:
+            for process in (producer, consumer):
+                if process.is_alive():
+                    process.terminate()
+                    process.join()
+
+            creator.close()
+            producer_queue.close()
+            consumer_queue.close()
+            producer_queue.join_thread()
+            consumer_queue.join_thread()

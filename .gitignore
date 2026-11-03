@@ -219,5 +219,10 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# Local datasets (never commit)
+data/
+src/*.so
+src/*.c
+
 
 data/NIFTY50_all.csv
