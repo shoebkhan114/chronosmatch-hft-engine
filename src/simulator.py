@@ -81,8 +81,9 @@ class MarketSimulator:
         count=100_000,
         initial_price=1000.0,
         delay=0,
+        seed=None,
     ):
-        """Generate synthetic orders without loading dataset rows."""
+        """Generate reproducible synthetic orders without dataset rows."""
         if count < 1:
             raise ValueError("count must be at least 1")
 
@@ -92,23 +93,21 @@ class MarketSimulator:
         if delay < 0:
             raise ValueError("delay cannot be negative")
 
+        rng = random.Random(seed)
         price = float(initial_price)
 
         for order_id in range(1, count + 1):
-            # Move the simulated price up or down by one tick.
-            price += random.choice([-1, 1]) * TICK_SIZE_INR
-
-            # Keep the price positive.
+            price += rng.choice([-1, 1]) * TICK_SIZE_INR
             price = max(price, TICK_SIZE_INR)
 
-            side = random.choice([Side.BUY, Side.SELL])
+            side = rng.choice([Side.BUY, Side.SELL])
 
             order = Order(
                 order_id=order_id,
                 timestamp_ns=time.time_ns(),
                 side=side,
                 price_ticks=round(price / TICK_SIZE_INR),
-                quantity=random.randint(1, 100),
+                quantity=rng.randint(1, 100),
                 order_type=OrderType.LIMIT,
             )
 
@@ -117,3 +116,5 @@ class MarketSimulator:
 
             if delay > 0:
                 await asyncio.sleep(delay)
+            elif order_id % 1000 == 0:
+                await asyncio.sleep(0)
