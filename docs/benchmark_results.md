@@ -21,10 +21,15 @@ All numbers are single runs. Do not compare different workloads.
 - Cause of the original slowdown: the book list was re-sorted on every insert. insort removes that; mid-list insert is still O(n), so throughput still falls as the book grows.
 
 ## Ring buffer, 1,000,000-order cross-process test (mid-review requirement)
-- Scope: Ajay's cross-process benchmark run with ORDER_COUNT = 1,000,000 (ring buffer only, no matching engine), capacity 1,024, spawn context with shared lock. Consumer verified strictly increasing order IDs (FIFO integrity); no errors.
-- Result (single run, one laptop): 1,000,000 sent, 1,000,000 received, 3.968 seconds, about 252,008 orders/sec.
-- Not claimed: zero-copy, end-to-end throughput, or repeatability (single run).
-- Command: `PYTHONPATH=. python -c "import benchmarks.benchmark_multiprocess_ring_buffer as b; b.ORDER_COUNT = 1_000_000; b.PROCESS_TIMEOUT = 300; b.main()"`
+- Scope: cross-process benchmark (ring buffer only, no matching engine), 1,000,000 orders, capacity 1,024, spawn context with shared lock. Consumer verified strictly increasing order IDs (FIFO integrity); no errors.
+- Results (three single runs, different laptops/timing methods, NOT comparable and NOT averaged):
+  - My run, old timing: 1,000,000 sent and received, 3.968 s, about 252k orders/sec.
+  - Ajay's laptop, his benchmark: about 301k orders/sec.
+  - My run of Ajay's new benchmark: about 114.7k orders/sec, 15,272 full-buffer retries (failed put() calls). His timer also includes process startup.
+- Spread between runs is about 2.6x, so no single number is representative.
+- Wraparounds: at least 976 is a calculation (1,000,000 // 1,024), not a measured value.
+- Not claimed: zero-copy, end-to-end throughput, or repeatability.
+- Command (ORDER_COUNT default is now 1,000,000; for the 100k run set ORDER_COUNT = 100_000): `PYTHONPATH=. python -c "import benchmarks.benchmark_multiprocess_ring_buffer as b; b.ORDER_COUNT = 1_000_000; b.PROCESS_TIMEOUT = 300; b.main()"`
 
 ## Matching engine, Cython vs Python (engine-only, no ring buffer)
 - Scope: 100,000 seeded mixed LIMIT orders (random-walk mid price, seed 42), single process, add_order only, 92,796 trades in both engines. One laptop, noisy machine (the Python engine's own median varied from about 345k to 501k orders/sec between sessions).
