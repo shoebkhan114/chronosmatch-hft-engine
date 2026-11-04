@@ -51,6 +51,14 @@ All numbers are single runs. Do not compare different workloads.
 - Reading: get() and add_order take similar time per order, so speeding up only one of them would not reach the throughput target by itself. This is inferred from medians, not from a profiler.
 - Command: `PYTHONPATH=. python benchmarks/benchmark_end_to_end.py`
 
+## GC on vs off (end-to-end consumer, engine-side metrics)
+- Setup: same end-to-end benchmark (100,000 seeded orders, 92,796 trades, capacity 1,024, 2 processes). `BENCH_GC=off` calls gc.disable() inside the consumer process only. 10 rounds per mode, alternating order, one session, one noisy laptop.
+- Medians over 10 rounds (gc on vs gc off): consumer-window throughput 78.8k vs 80.8k orders/sec; engine-only median 4.86 vs 5.06 us; engine-only p99 10.82 vs 11.77 us; engine-only p99.9 29.74 vs 17.74 us; get() median 4.20 vs 4.84 us.
+- Noise: single-run throughput within the same mode ranged from about 53k to 110k orders/sec (about 2x), much larger than the about 3% median difference.
+- Reading: no clear GC effect on median or p99 in this workload. Only p99.9 looked better with GC off; with 10 runs on a noisy laptop this is NOT treated as proven. Reason for the small effect was not investigated.
+- Not claimed: any end-to-end improvement, any effect at other loads, or repeatability across sessions (one session only).
+- Commands: `python benchmarks/run_gc_experiment.py` (GC_ROUNDS env var sets rounds, default 10); single run: `BENCH_GC=off PYTHONPATH=. python benchmarks/benchmark_end_to_end.py`
+
 ## Not measured yet
 - Low-load end-to-end latency (the end-to-end run above is a saturated pipeline).
 - The 100,000 orders/sec and under-50 us targets were NOT achieved end-to-end in the runs above.
