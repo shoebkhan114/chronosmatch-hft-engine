@@ -62,6 +62,9 @@ def producer_process(path, capacity, lock, order_count):
 
 def consumer_process(path, capacity, lock, order_count, result_queue):
     buffer = RingBuffer(path, capacity, lock=lock)
+    import gc
+    if os.environ.get("BENCH_GC", "on") == "off":
+        gc.disable()
     engine = MatchingEngine()
     end_to_end = []
     engine_only = []
@@ -150,6 +153,7 @@ def main():
                     f"p99 {s['p99_us']:.2f} us | p99.9 {s['p999_us']:.2f} us | max {s['max_us']:.2f} us"
                 )
             print("Benchmark type: end-to-end producer -> ring buffer -> engine (2 processes, single run)")
+            print(f"GC in consumer: {os.environ.get('BENCH_GC', 'on')}")
         finally:
             for process in (producer, consumer):
                 if process.is_alive():
