@@ -12,6 +12,7 @@ Internship project (Infotact Solutions, Python Development, Batch-22). This is a
 - `src/matching_engine_cy.pyx`: Cython version of the engine (optional build).
 - `src/simulator.py`: asyncio order simulator (NIFTY-50 dataset mode and seeded random-walk mode).
 - `src/dashboard.py`: manual command-line demo (not a curses dashboard).
+- `src/trade_store.py`: SQLite trade store with a background writer thread (not yet integrated into the pipeline).
 - `benchmarks/`: ring buffer, multiprocess ring buffer, matching engine, end-to-end.
 - `docs/`: architecture, benchmark results, dataset report, ring buffer failure modes.
 
@@ -36,7 +37,7 @@ python -m pytest -q            # default run, slow test excluded
 python -m pytest -m slow       # 1,000,000-order cross-process stress test
 ~~~
 
-Last verified: 64 passed, 1 deselected (slow test).
+Last verified: 69 passed, 1 deselected (slow test).
 
 ## Benchmarks (single runs on one noisy laptop)
 
@@ -66,11 +67,11 @@ Details and caveats: `docs/benchmark_results.md`.
 - Ring buffer has no crash recovery and is not lock-free (see `docs/ring_buffer_failure_modes.md`).
 - `get()` does not validate quantity or price; call `Order.validate()`.
 - Matching engine uses O(n) list operations and mutates `Order.quantity` in place.
-- No live curses dashboard, no perf_counter_ns in-path metrics, no database flush yet.
+- No live curses dashboard. `TradeStore` (SQLite) is implemented and unit-tested but not connected to the live pipeline, and its cost to the engine is not measured. perf_counter_ns timing exists only inside the end-to-end benchmark, not in a live monitor.
 
 ## Planned
 
-Curses live dashboard with latency panel, background trade flush to SQLite, in-path latency metrics.
+Curses live dashboard with latency panel, connecting `TradeStore` to the pipeline and measuring its cost, live latency metrics.
 
 ## Team
 
