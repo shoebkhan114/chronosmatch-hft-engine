@@ -37,3 +37,40 @@ def format_book_lines(
         f" | Sells in book: {len(engine.sell_orders)}"
     )
     return lines
+
+
+WHALE_QTY = 90
+
+
+def spread_ticks(engine: MatchingEngine):
+    """Best ask minus best bid in ticks, or None if either side is empty."""
+    if not engine.buy_orders or not engine.sell_orders:
+        return None
+    return engine.sell_orders[0].price_ticks - engine.buy_orders[0].price_ticks
+
+
+def format_side_by_side(
+    engine: MatchingEngine, depth: int = 8, whale_qty: int = WHALE_QTY
+) -> List[str]:
+    """BUY (left) and SELL (right) columns; rows with qty >= whale_qty end in ' <WHALE>'."""
+    spread = spread_ticks(engine)
+    spread_text = "n/a" if spread is None else f"{spread} ticks"
+    lines = [
+        f"SPREAD: {spread_text}  |  WHALE: qty >= {whale_qty}",
+        f"{'BUY (best first)':<34}{'SELL (best first)':<34}",
+        f"{'ID':<9}{'Price':<9}{'Qty':<9}  {'ID':<9}{'Price':<9}{'Qty':<9}",
+    ]
+
+    def cell(order):
+        if order is None:
+            return " " * 28
+        mark = "*" if order.quantity >= whale_qty else " "
+        return f"{order.order_id:<9}{order.price_ticks:<9}{order.quantity:<9}{mark}"
+
+    buys = engine.buy_orders[:depth]
+    sells = engine.sell_orders[:depth]
+    for i in range(max(len(buys), len(sells), 1)):
+        left = cell(buys[i] if i < len(buys) else None)
+        right = cell(sells[i] if i < len(sells) else None)
+        lines.append(f"{left}  {right}".rstrip())
+    return lines
