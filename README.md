@@ -12,7 +12,7 @@ Internship project (Infotact Solutions, Python Development, Batch-22). This is a
 - `src/matching_engine_cy.pyx`: Cython version of the engine (optional build).
 - `src/simulator.py`: asyncio order simulator (NIFTY-50 dataset mode and seeded random-walk mode).
 - `src/dashboard.py`: manual command-line demo (not a curses dashboard).
-- `src/trade_store.py`: SQLite trade store with a background writer thread (not yet integrated into the pipeline).
+- `src/trade_store.py`: SQLite trade store with a background writer thread. Connected to the live dashboard consumer when a db path is given (one 100k run stored 92,796 trades, matching the dashboard count).
 - `src/live_dashboard.py`, `src/live_snapshot.py`, `src/book_view.py`, `src/latency_stats.py`: live curses dashboard (separate consumer process sends snapshots through a queue; rolling median/p99/max latency; order book and recent trades). Run: `PYTHONPATH=. python -m src.live_dashboard 100000` (press q to quit).
 - `benchmarks/`: ring buffer, multiprocess ring buffer, matching engine, end-to-end.
 - `docs/`: architecture, benchmark results, dataset report, ring buffer failure modes.
@@ -22,8 +22,9 @@ Internship project (Infotact Solutions, Python Development, Batch-22). This is a
 ~~~bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python -m pytest -q                                  # expect 70 passed, 1 skipped (no Cython build)
-PYTHONPATH=. python -m src.live_dashboard 100000     # live curses dashboard, press q to quit
+python -m pytest -q                                  # expect 95 passed, 1 skipped (no Cython build)
+PYTHONPATH=. python -m src.live_dashboard 100000     # live curses dashboard; g = latency graph, q = quit
+PYTHONPATH=. python -m src.live_dashboard 100000 trades.db   # same, also flush trades to SQLite
 ~~~
 
 The dashboard uses synthetic random-walk orders and needs no dataset. Dataset mode needs a local `data/` folder (gitignored, not in the repo). Dashboard latency is end-to-end and includes queueing delay, so it is in milliseconds; the 50 us target is not achieved.
@@ -50,7 +51,7 @@ python -m pytest -q            # default run, slow test excluded
 python -m pytest -m slow       # 1,000,000-order cross-process stress test
 ~~~
 
-Last verified (fresh clone of `shoeb-lead`): 70 passed, 1 skipped, 1 deselected without the Cython build; 86 passed, 1 deselected with it (the 16 matching-engine tests are re-run on the Cython engine).
+Last verified (fresh clone of `shoeb-lead`, 7 Nov): 95 passed, 1 skipped, 1 deselected without the Cython build. In the developer folder with the Cython build: 111 passed, 1 deselected (the 16 matching-engine tests are re-run on the Cython engine; this count was not re-measured in a fresh clone).
 
 ## Benchmarks (single runs on one noisy laptop)
 
@@ -90,3 +91,16 @@ Connecting `TradeStore` to the pipeline and measuring its cost; automated tests 
 ## Team
 
 Shoeb Khan (lead), Ajay, Vighnesh, Likiteshwar.
+
+## Dashboard features
+
+- Order book side by side (BUY left, SELL right), SPREAD line, and rows with quantity >= 90 marked `*` (whale highlight, magenta).
+- Rolling end-to-end latency (median, p99, max) from perf_counter_ns.
+- Press `g` to open a live matplotlib latency graph in a separate process; press `g` again or close the window to stop it; `q` quits and also closes the graph. matplotlib is imported only by `src/latency_plot.py`.
+
+## Honest limits (brief vs result)
+
+- 50 us matching and 100,000 orders/sec end to end are NOT achieved. Dashboard latency is in milliseconds because it includes queueing in a nearly full ring buffer; engine-only median is a few microseconds.
+- No Cython `cdef`-level rewrite of the matching loop and no GC-free guarantee; a GC on/off experiment showed no clear effect.
+- Trade flush to SQLite uses a background thread, not a separate process. Its cost to the engine, and the cost of the latency CSV export, were not measured.
+- The curses screen layer and the matplotlib window are checked manually, not by automated tests.
