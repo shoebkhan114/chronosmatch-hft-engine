@@ -15,15 +15,18 @@ from src.latency_stats import LatencyWindow
 from src.live_snapshot import format_status_lines, make_snapshot
 from src.matching_engine import MatchingEngine
 from src.ring_buffer import RingBuffer
+from src.trade_store import TradeStore
 
 CAPACITY = 1024
 REFRESH_S = 0.1
 
 
-def dashboard_consumer(path, capacity, lock, order_count, snapshot_queue):
+def dashboard_consumer(path, capacity, lock, order_count, snapshot_queue,
+                       db_path=None):
     buffer = RingBuffer(path, capacity, lock=lock)
     engine = MatchingEngine()
     window = LatencyWindow(1000)
+    store = TradeStore(db_path) if db_path else None
     received = 0
     start = time.perf_counter()
     last_snap = start
@@ -33,7 +36,9 @@ def dashboard_consumer(path, capacity, lock, order_count, snapshot_queue):
             if order is None:
                 time.sleep(0)
                 continue
-            engine.add_order(order)
+            new_trades = engine.add_order(order)
+            if store is not None:
+                store.submit(new_trades)
             window.add(time.perf_counter_ns() - order.timestamp_ns)
             received += 1
             now = time.perf_counter()
@@ -58,6 +63,8 @@ def dashboard_consumer(path, capacity, lock, order_count, snapshot_queue):
             pass
     finally:
         buffer.close()
+        if store is not None:
+            store.close()
 
 
 def screen_lines(snapshot):
@@ -147,7 +154,7 @@ def run_curses(snapshot_queue):
     curses.wrapper(_loop, snapshot_queue)
 
 
-def main(order_count=300_000):
+def main(order_count=300_000, db_path=None):
     from benchmarks.benchmark_end_to_end import producer_process
 
     context = multiprocessing.get_context("spawn")
@@ -158,7 +165,7 @@ def main(order_count=300_000):
         creator = RingBuffer(path, CAPACITY, create=True, lock=lock)
         consumer = context.Process(
             target=dashboard_consumer,
-            args=(path, CAPACITY, lock, order_count, snapshot_queue))
+            args=(path, CAPACITY, lock, order_count, snapshot_queue, db_path))
         producer = context.Process(
             target=producer_process,
             args=(path, CAPACITY, lock, order_count))
@@ -176,4 +183,5 @@ def main(order_count=300_000):
 
 
 if __name__ == "__main__":
-    main(int(sys.argv[1]) if len(sys.argv) > 1 else 300_000)
+    main(int(sys.argv[1]) if len(sys.argv) > 1 else 300_000,
+         sys.argv[2] if len(sys.argv) > 2 else None)
