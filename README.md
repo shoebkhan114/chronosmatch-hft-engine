@@ -17,6 +17,17 @@ Internship project (Infotact Solutions, Python Development, Batch-22). This is a
 - `benchmarks/`: ring buffer, multiprocess ring buffer, matching engine, end-to-end.
 - `docs/`: architecture, benchmark results, dataset report, ring buffer failure modes.
 
+## Quick start for reviewers
+
+~~~bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python -m pytest -q                                  # expect 70 passed, 1 skipped (no Cython build)
+PYTHONPATH=. python -m src.live_dashboard 100000     # live curses dashboard, press q to quit
+~~~
+
+The dashboard uses synthetic random-walk orders and needs no dataset. Dataset mode needs a local `data/` folder (gitignored, not in the repo). Dashboard latency is end-to-end and includes queueing delay, so it is in milliseconds; the 50 us target is not achieved.
+
 ## Setup
 
 ~~~bash
@@ -25,9 +36,10 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ~~~
 
-Optional Cython build (Cython tests are skipped if it is not built):
+Optional Cython build (needs a C compiler; Cython tests are skipped if it is not built). `setuptools` and `cython` are not in `requirements.txt`, so install them first:
 
 ~~~bash
+pip install setuptools cython
 python setup.py build_ext --inplace
 ~~~
 
@@ -38,7 +50,7 @@ python -m pytest -q            # default run, slow test excluded
 python -m pytest -m slow       # 1,000,000-order cross-process stress test
 ~~~
 
-Last verified: 86 passed, 1 deselected (slow test).
+Last verified (fresh clone of `shoeb-lead`): 70 passed, 1 skipped, 1 deselected without the Cython build; 86 passed, 1 deselected with it (the 16 matching-engine tests are re-run on the Cython engine).
 
 ## Benchmarks (single runs on one noisy laptop)
 
