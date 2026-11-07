@@ -40,7 +40,8 @@ def dashboard_consumer(path, capacity, lock, order_count, snapshot_queue):
             if now - last_snap >= REFRESH_S:
                 last_snap = now
                 snap = make_snapshot(engine, window, received,
-                                     received / (now - start))
+                                     received / (now - start),
+                                     side_by_side=True)
                 snap["done"] = False
                 try:
                     snapshot_queue.put_nowait(snap)
@@ -48,7 +49,8 @@ def dashboard_consumer(path, capacity, lock, order_count, snapshot_queue):
                     pass
         end = time.perf_counter()
         final = make_snapshot(engine, window, received,
-                              received / max(end - start, 1e-9))
+                              received / max(end - start, 1e-9),
+                              side_by_side=True)
         final["done"] = True
         try:
             snapshot_queue.put(final, timeout=5)
@@ -76,6 +78,12 @@ def line_color(text):
         return "sell"
     if text.startswith("RECENT TRADES"):
         return "title"
+    if text.startswith("SPREAD"):
+        return "stat"
+    if text.startswith("BUY (") or text.startswith("ID "):
+        return "title"
+    if "*" in text:
+        return "whale"
     if text.startswith("end-to-end latency") or text.startswith("orders received"):
         return "stat"
     return "plain"
@@ -91,7 +99,8 @@ def _init_colors():
             pass
         for index, (name, fg) in enumerate(
             [("title", curses.COLOR_CYAN), ("buy", curses.COLOR_GREEN),
-             ("sell", curses.COLOR_RED), ("stat", curses.COLOR_YELLOW)],
+             ("sell", curses.COLOR_RED), ("stat", curses.COLOR_YELLOW),
+             ("whale", curses.COLOR_MAGENTA)],
             start=1,
         ):
             curses.init_pair(index, fg, -1)
