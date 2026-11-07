@@ -66,12 +66,46 @@ def screen_lines(snapshot):
     return lines
 
 
+def line_color(text):
+    """Pick a color name for a screen line (pure function, testable)."""
+    if text.startswith("CHRONOSMATCH") or text.startswith("FINISHED"):
+        return "title"
+    if text.startswith("BUY ORDERS"):
+        return "buy"
+    if text.startswith("SELL ORDERS"):
+        return "sell"
+    if text.startswith("RECENT TRADES"):
+        return "title"
+    if text.startswith("end-to-end latency") or text.startswith("orders received"):
+        return "stat"
+    return "plain"
+
+
+def _init_colors():
+    pairs = {}
+    if curses.has_colors():
+        curses.start_color()
+        try:
+            curses.use_default_colors()
+        except curses.error:
+            pass
+        for index, (name, fg) in enumerate(
+            [("title", curses.COLOR_CYAN), ("buy", curses.COLOR_GREEN),
+             ("sell", curses.COLOR_RED), ("stat", curses.COLOR_YELLOW)],
+            start=1,
+        ):
+            curses.init_pair(index, fg, -1)
+            pairs[name] = curses.color_pair(index) | curses.A_BOLD
+    return pairs
+
+
 def _loop(stdscr, snapshot_queue):
     try:
         curses.curs_set(0)
     except curses.error:
         pass
     stdscr.nodelay(True)
+    colors = _init_colors()
     latest = None
     while True:
         if stdscr.getch() in (ord("q"), ord("Q")):
@@ -84,8 +118,18 @@ def _loop(stdscr, snapshot_queue):
         if latest is not None:
             stdscr.erase()
             height, width = stdscr.getmaxyx()
-            for row, text in enumerate(screen_lines(latest)[: height - 1]):
-                stdscr.addstr(row, 0, text[: width - 1])
+            lines = screen_lines(latest)
+            footer = []
+            if latest.get("done"):
+                footer = lines[-1:]
+                lines = lines[:-2]
+            visible = lines[: max(height - 1 - len(footer), 0)]
+            for row, text in enumerate(visible):
+                attr = colors.get(line_color(text), 0)
+                stdscr.addstr(row, 0, text[: width - 1], attr)
+            for i, text in enumerate(footer):
+                stdscr.addstr(height - len(footer) + i, 0, text[: width - 1],
+                              colors.get("title", 0))
             stdscr.refresh()
         time.sleep(0.05)
 
