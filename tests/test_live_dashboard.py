@@ -43,3 +43,27 @@ def test_screen_lines_show_finished_message_only_when_done():
 def test_screen_lines_start_with_status_header():
     snap = make_snapshot(MatchingEngine(), LatencyWindow(5), 0, 0.0)
     assert screen_lines(snap)[0].startswith("CHRONOSMATCH LIVE")
+
+
+from src.live_dashboard import line_color
+
+
+def test_line_color_titles_and_sides():
+    assert line_color("CHRONOSMATCH LIVE (simulated)") == "title"
+    assert line_color("FINISHED - all orders processed.") == "title"
+    assert line_color("BUY ORDERS (highest price first)") == "buy"
+    assert line_color("SELL ORDERS (lowest price first)") == "sell"
+
+
+def test_line_color_stats_and_plain():
+    assert line_color("end-to-end latency (last 5): median 1.0 us") == "stat"
+    assert line_color("orders received: 5 | rate: 10/s") == "stat"
+    assert line_color("99816     25166     23") == "plain"
+
+
+def test_line_color_recent_trades_is_title():
+    assert line_color("RECENT TRADES") == "title"
+
+
+def test_line_color_empty_line_is_plain():
+    assert line_color("") == "plain"
