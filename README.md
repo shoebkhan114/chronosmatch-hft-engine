@@ -13,6 +13,7 @@ Internship project (Infotact Solutions, Python Development, Batch-22). This is a
 - `src/simulator.py`: asyncio order simulator (NIFTY-50 dataset mode and seeded random-walk mode).
 - `src/dashboard.py`: manual command-line demo (not a curses dashboard).
 - `src/trade_store.py`: SQLite trade store with a background writer thread (not yet integrated into the pipeline).
+- `src/live_dashboard.py`, `src/live_snapshot.py`, `src/book_view.py`, `src/latency_stats.py`: live curses dashboard (separate consumer process sends snapshots through a queue; rolling median/p99/max latency; order book and recent trades). Run: `PYTHONPATH=. python -m src.live_dashboard 100000` (press q to quit).
 - `benchmarks/`: ring buffer, multiprocess ring buffer, matching engine, end-to-end.
 - `docs/`: architecture, benchmark results, dataset report, ring buffer failure modes.
 
@@ -37,7 +38,7 @@ python -m pytest -q            # default run, slow test excluded
 python -m pytest -m slow       # 1,000,000-order cross-process stress test
 ~~~
 
-Last verified: 69 passed, 1 deselected (slow test).
+Last verified: 86 passed, 1 deselected (slow test).
 
 ## Benchmarks (single runs on one noisy laptop)
 
@@ -55,6 +56,7 @@ Measured so far (single runs; run-to-run variance is large, so no single number 
 - End-to-end (producer, ring buffer, engine, 2 processes, 100k synthetic orders): about 39k to 92k orders/sec in 5 runs.
 - Matching engine only: median add_order a few microseconds.
 - Cython vs Python, engine-only: about 35 to 43% faster in 3 sessions (not isolated, not end-to-end).
+- Live dashboard, one manual run, 100,000 orders: about 94.7k orders/sec, end-to-end latency median about 4.6 ms (queueing included), 92,796 trades. Single run, not a target result.
 
 Details and caveats: `docs/benchmark_results.md`.
 
@@ -67,11 +69,11 @@ Details and caveats: `docs/benchmark_results.md`.
 - Ring buffer has no crash recovery and is not lock-free (see `docs/ring_buffer_failure_modes.md`).
 - `get()` does not validate quantity or price; call `Order.validate()`.
 - Matching engine uses O(n) list operations and mutates `Order.quantity` in place.
-- No live curses dashboard. `TradeStore` (SQLite) is implemented and unit-tested but not connected to the live pipeline, and its cost to the engine is not measured. perf_counter_ns timing exists only inside the end-to-end benchmark, not in a live monitor.
+- The curses screen layer is not unit-tested (the data/formatting parts are) and was run manually only a few times. Dashboard latency is end-to-end and includes queueing delay in the ring buffer, so it is in milliseconds, not 50 us. `TradeStore` (SQLite) is implemented and unit-tested but not connected to the live pipeline, and its cost to the engine is not measured.
 
 ## Planned
 
-Curses live dashboard with latency panel, connecting `TradeStore` to the pipeline and measuring its cost, live latency metrics.
+Connecting `TradeStore` to the pipeline and measuring its cost; automated tests for the curses layer.
 
 ## Team
 
