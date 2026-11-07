@@ -67,3 +67,24 @@ def test_line_color_recent_trades_is_title():
 
 def test_line_color_empty_line_is_plain():
     assert line_color("") == "plain"
+
+
+def test_consumer_flushes_trades_to_sqlite(tmp_path):
+    import sqlite3
+    path = str(tmp_path / "rb2.bin")
+    db = str(tmp_path / "trades.db")
+    lock = threading.Lock()
+    creator = RingBuffer(path, 16, create=True, lock=lock)
+    for i in range(1, 11):
+        side = Side.BUY if i % 2 else Side.SELL
+        assert creator.put(Order(i, time.perf_counter_ns(), side, 10000, 5,
+                                 OrderType.LIMIT))
+    q = queue.Queue()
+    dashboard_consumer(path, 16, lock, 10, q, db_path=db)
+    creator.close()
+    snaps = []
+    while not q.empty():
+        snaps.append(q.get())
+    stored = sqlite3.connect(db).execute("SELECT COUNT(*) FROM trades").fetchone()[0]
+    assert stored == 5
+    assert "Trades: 5" in "\n".join(snaps[-1]["lines"])
