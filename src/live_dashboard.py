@@ -6,11 +6,14 @@ add_order), which includes queueing delay in the ring buffer.
 import curses
 import multiprocessing
 import os
+import subprocess
 import sys
 import tempfile
 import time
+from collections import deque
 from queue import Empty, Full
 
+from src.latency_io import write_latency_csv
 from src.latency_stats import LatencyWindow
 from src.live_snapshot import format_status_lines, make_snapshot
 from src.matching_engine import MatchingEngine
@@ -22,11 +25,13 @@ REFRESH_S = 0.1
 
 
 def dashboard_consumer(path, capacity, lock, order_count, snapshot_queue,
-                       db_path=None):
+                       db_path=None, latency_csv=None):
     buffer = RingBuffer(path, capacity, lock=lock)
     engine = MatchingEngine()
     window = LatencyWindow(1000)
     store = TradeStore(db_path) if db_path else None
+    samples = deque(maxlen=5000)
+    last_csv = 0.0
     received = 0
     start = time.perf_counter()
     last_snap = start
@@ -39,11 +44,17 @@ def dashboard_consumer(path, capacity, lock, order_count, snapshot_queue,
             new_trades = engine.add_order(order)
             if store is not None:
                 store.submit(new_trades)
-            window.add(time.perf_counter_ns() - order.timestamp_ns)
+            lat = time.perf_counter_ns() - order.timestamp_ns
+            window.add(lat)
+            if latency_csv:
+                samples.append(lat)
             received += 1
             now = time.perf_counter()
             if now - last_snap >= REFRESH_S:
                 last_snap = now
+                if latency_csv and now - last_csv >= 1.0:
+                    last_csv = now
+                    write_latency_csv(latency_csv, samples)
                 snap = make_snapshot(engine, window, received,
                                      received / (now - start),
                                      side_by_side=True)
@@ -53,6 +64,8 @@ def dashboard_consumer(path, capacity, lock, order_count, snapshot_queue,
                 except Full:
                     pass
         end = time.perf_counter()
+        if latency_csv:
+            write_latency_csv(latency_csv, samples)
         final = make_snapshot(engine, window, received,
                               received / max(end - start, 1e-9),
                               side_by_side=True)
@@ -96,6 +109,30 @@ def line_color(text):
     return "plain"
 
 
+def start_plot(csv_path):
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return subprocess.Popen(
+        [sys.executable, "-m", "src.latency_plot", csv_path], cwd=root,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def stop_plot(proc):
+    if proc is not None and proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+
+def toggle_plot(proc, start):
+    """Stop the graph process if it is running, otherwise start a new one."""
+    if proc is not None and proc.poll() is None:
+        stop_plot(proc)
+        return None
+    return start()
+
+
 def _init_colors():
     pairs = {}
     if curses.has_colors():
@@ -115,7 +152,7 @@ def _init_colors():
     return pairs
 
 
-def _loop(stdscr, snapshot_queue):
+def _loop(stdscr, snapshot_queue, plot_csv=None):
     try:
         curses.curs_set(0)
     except curses.error:
@@ -123,9 +160,14 @@ def _loop(stdscr, snapshot_queue):
     stdscr.nodelay(True)
     colors = _init_colors()
     latest = None
+    plot = None
     while True:
-        if stdscr.getch() in (ord("q"), ord("Q")):
+        key = stdscr.getch()
+        if key in (ord("q"), ord("Q")):
+            stop_plot(plot)
             return
+        if key in (ord("g"), ord("G")) and plot_csv:
+            plot = toggle_plot(plot, lambda: start_plot(plot_csv))
         while True:
             try:
                 latest = snapshot_queue.get_nowait()
@@ -150,8 +192,8 @@ def _loop(stdscr, snapshot_queue):
         time.sleep(0.05)
 
 
-def run_curses(snapshot_queue):
-    curses.wrapper(_loop, snapshot_queue)
+def run_curses(snapshot_queue, plot_csv=None):
+    curses.wrapper(_loop, snapshot_queue, plot_csv)
 
 
 def main(order_count=300_000, db_path=None):
@@ -162,17 +204,19 @@ def main(order_count=300_000, db_path=None):
     snapshot_queue = context.Queue(maxsize=2)
     with tempfile.TemporaryDirectory() as directory:
         path = os.path.join(directory, "live.bin")
+        latency_csv = os.path.join(directory, "latency.csv")
         creator = RingBuffer(path, CAPACITY, create=True, lock=lock)
         consumer = context.Process(
             target=dashboard_consumer,
-            args=(path, CAPACITY, lock, order_count, snapshot_queue, db_path))
+            args=(path, CAPACITY, lock, order_count, snapshot_queue, db_path,
+                  latency_csv))
         producer = context.Process(
             target=producer_process,
             args=(path, CAPACITY, lock, order_count))
         try:
             consumer.start()
             producer.start()
-            run_curses(snapshot_queue)
+            run_curses(snapshot_queue, latency_csv)
         finally:
             for process in (producer, consumer):
                 if process.is_alive():

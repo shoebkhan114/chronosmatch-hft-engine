@@ -47,7 +47,7 @@ def format_status_lines(snapshot: dict) -> list:
             f" | max {lat['max_us']:.1f} us"
         )
     return [
-        "CHRONOSMATCH LIVE (simulated)  -  press q to quit",
+        "CHRONOSMATCH LIVE (simulated)  -  g = latency graph | q = quit",
         f"orders received: {snapshot['received']} | rate: {snapshot['rate']:.0f}/s",
         lat_text,
         "",
