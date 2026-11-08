@@ -13,7 +13,7 @@ Internship project (Infotact Solutions, Python Development, Batch-22). This is a
 - `src/simulator.py`: asyncio order simulator (NIFTY-50 dataset mode and seeded random-walk mode).
 - `src/dashboard.py`: manual command-line demo (not a curses dashboard).
 - `src/trade_store.py`: SQLite trade store with a background writer thread. Connected to the live dashboard consumer when a db path is given (one 100k run stored 92,796 trades, matching the dashboard count).
-- `src/live_dashboard.py`, `src/live_snapshot.py`, `src/book_view.py`, `src/latency_stats.py`: live curses dashboard (separate consumer process sends snapshots through a queue; rolling median/p99/max latency; order book and recent trades). Run: `PYTHONPATH=. python -m src.live_dashboard 100000` (press q to quit).
+- `src/live_dashboard.py`, `src/live_snapshot.py`, `src/book_view.py`, `src/latency_stats.py`: live curses dashboard (separate consumer process sends snapshots through a queue; rolling median/p99/max latency; order book and recent trades). Run: `PYTHONPATH=. python -m src.live_dashboard 100000` (press g for the latency graph, q to quit).
 - `benchmarks/`: ring buffer, multiprocess ring buffer, matching engine, end-to-end.
 - `docs/`: architecture, benchmark results, dataset report, ring buffer failure modes.
 
