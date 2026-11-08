@@ -29,6 +29,36 @@ PYTHONPATH=. python -m src.live_dashboard 100000 trades.db   # same, also flush 
 
 The dashboard uses synthetic random-walk orders and needs no dataset. Dataset mode needs a local `data/` folder (gitignored, not in the repo). Dashboard latency is end-to-end and includes queueing delay, so it is in milliseconds; the 50 us target is not achieved.
 
+## Running on Windows (VS Code)
+
+Tested on Ubuntu only. The Windows steps below have NOT been tested; if a step fails, send the full error output.
+
+### Option B: native Windows (PowerShell in the VS Code terminal)
+
+Needs Python 3.12 and Git installed.
+
+~~~powershell
+git clone --branch shoeb-lead https://github.com/shoebkhan114/chronosmatch-hft-engine.git
+cd chronosmatch-hft-engine
+py -3.12 -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+pip install windows-curses
+python -m pytest -q
+$env:PYTHONPATH="."; python -m src.live_dashboard 100000
+~~~
+
+Notes:
+- If PowerShell blocks the activate script, run `Set-ExecutionPolicy -Scope Process Bypass` and activate again.
+- `windows-curses` is needed for the dashboard because Python on Windows has no `curses` module. It is not in `requirements.txt`.
+- The ring buffer uses a file-backed mmap. Windows handles open memory-mapped files differently, so some ring buffer tests may fail there. This is unknown, not guaranteed to pass.
+- Cython tests are skipped unless a C compiler (Visual Studio Build Tools) is installed. This is normal.
+- Dashboard keys: `g` opens the latency graph, `q` quits.
+
+### Option A (recommended): WSL2 + VS Code
+
+Install WSL with `wsl --install -d Ubuntu` (PowerShell as Administrator), install the VS Code "WSL" extension, then follow the Linux commands in "Quick start for reviewers" inside the Ubuntu terminal. The graph window (`g`) needs Windows 11 (WSLg).
+
 ## Setup
 
 ~~~bash
