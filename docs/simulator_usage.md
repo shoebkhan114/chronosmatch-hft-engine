@@ -31,6 +31,20 @@ asyncio.run(main())
 
 The simulator filters the selected stock and generates orders from valid dataset rows.
 
+### Historical Dataset Validation
+
+Before generating orders, the simulator validates and prepares the historical dataset:
+
+1. Converts the `Date` column into datetime format.
+2. Filters records using the configured stock symbol.
+3. Removes rows containing missing values in `Date`, `Open`, `High`, `Low`, `Close`, or `Volume`.
+4. Raises a `ValueError` if no valid market data remains for the selected symbol.
+
+Invalid date values that cannot be converted are rejected during datetime conversion.
+
+This ensures that historical orders are generated only from valid dataset records.
+
+
 ## 3. Synthetic Random-Walk Mode
 
 Synthetic mode generates orders without loading a CSV dataset.
