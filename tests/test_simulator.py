@@ -336,3 +336,19 @@ def test_load_data_rejects_unknown_symbol(monkeypatch):
         match="No valid market data found for symbol: UNKNOWN",
     ):
         simulator.load_data()
+
+def test_load_data_rejects_invalid_date(monkeypatch):
+    """Verify that invalid historical dates raise an error."""
+    simulator = MarketSimulator(symbol="RELIANCE")
+    sample_data = create_test_data()
+
+    sample_data.loc[0, "Date"] = "invalid-date"
+
+    monkeypatch.setattr(
+        pd,
+        "read_csv",
+        lambda _path: sample_data.copy()
+    )
+
+    with pytest.raises(ValueError):
+        simulator.load_data()
