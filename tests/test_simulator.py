@@ -352,3 +352,23 @@ def test_load_data_rejects_invalid_date(monkeypatch):
 
     with pytest.raises(ValueError):
         simulator.load_data()
+
+
+def test_load_data_removes_rows_with_missing_dates(monkeypatch):
+    """Verify that rows with missing dates are removed."""
+    simulator = MarketSimulator(symbol="RELIANCE")
+    sample_data = create_test_data()
+
+    sample_data.loc[0, "Date"] = None
+
+    monkeypatch.setattr(
+        pd,
+        "read_csv",
+        lambda _path: sample_data.copy()
+    )
+
+    data = simulator.load_data()
+
+    assert len(data) == 1
+    assert data["Date"].notna().all()
+    assert set(data["Symbol"]) == {"RELIANCE"}

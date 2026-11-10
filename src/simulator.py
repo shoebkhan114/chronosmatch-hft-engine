@@ -27,7 +27,7 @@ class MarketSimulator:
         ]
 
         self.market_data = self.market_data.dropna(
-            subset=["Open", "High", "Low", "Close", "Volume"]
+            subset=["Date", "Open", "High", "Low", "Close", "Volume"]
         )
 
         if self.market_data.empty:
