@@ -173,13 +173,15 @@ def test_generate_random_orders_same_seed():
         simulator = MarketSimulator()
 
         orders1 = [
-            order async for order in simulator.generate_random_orders(
+            order
+            async for order in simulator.generate_random_orders(
                 count=100, seed=42
             )
         ]
 
         orders2 = [
-            order async for order in simulator.generate_random_orders(
+            order
+            async for order in simulator.generate_random_orders(
                 count=100, seed=42
             )
         ]
@@ -199,13 +201,15 @@ def test_generate_random_orders_different_seeds():
         simulator = MarketSimulator()
 
         orders1 = [
-            order async for order in simulator.generate_random_orders(
+            order
+            async for order in simulator.generate_random_orders(
                 count=100, seed=42
             )
         ]
 
         orders2 = [
-            order async for order in simulator.generate_random_orders(
+            order
+            async for order in simulator.generate_random_orders(
                 count=100, seed=99
             )
         ]
@@ -243,6 +247,8 @@ def test_generate_random_orders_yields_to_event_loop():
         assert background_task_ran
 
     asyncio.run(run_test())
+
+
 @pytest.mark.parametrize("initial_price", [0, -100])
 def test_generate_random_orders_rejects_invalid_initial_price(
     initial_price,
@@ -267,7 +273,9 @@ def test_generate_random_orders_rejects_negative_delay(delay):
     async def run_test():
         simulator = MarketSimulator()
 
-        with pytest.raises(ValueError, match="delay cannot be negative"):
+        with pytest.raises(
+            ValueError, match="delay cannot be negative"
+        ):
             async for _ in simulator.generate_random_orders(
                 count=10,
                 delay=delay,
@@ -281,8 +289,44 @@ def test_generate_orders_rejects_negative_delay():
     async def run_test():
         simulator = MarketSimulator()
 
-        with pytest.raises(ValueError, match="delay cannot be negative"):
+        with pytest.raises(
+            ValueError, match="delay cannot be negative"
+        ):
             async for _ in simulator.generate_orders(delay=-1):
                 pass
 
     asyncio.run(run_test())
+
+
+def test_load_data_removes_rows_with_missing_values(monkeypatch):
+    """Verify that rows with missing essential values are removed."""
+    simulator = MarketSimulator(symbol="RELIANCE")
+    sample_data = create_test_data()
+
+    sample_data.loc[0, "Close"] = float("nan")
+
+    monkeypatch.setattr(
+        pd, "read_csv", lambda _path: sample_data.copy()
+    )
+
+    data = simulator.load_data()
+
+    assert len(data) == 1
+    assert data["Close"].notna().all()
+    assert set(data["Symbol"]) == {"RELIANCE"}
+
+
+def test_load_data_rejects_unknown_symbol(monkeypatch):
+    """Verify that an unknown stock symbol raises ValueError."""
+    simulator = MarketSimulator(symbol="UNKNOWN")
+    sample_data = create_test_data()
+
+    monkeypatch.setattr(
+        pd, "read_csv", lambda _path: sample_data.copy()
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="No valid market data found for symbol: UNKNOWN",
+    ):
+        simulator.load_data()
