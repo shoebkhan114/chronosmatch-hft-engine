@@ -298,12 +298,18 @@ def test_generate_orders_rejects_negative_delay():
     asyncio.run(run_test())
 
 
-def test_load_data_removes_rows_with_missing_values(monkeypatch):
+@pytest.mark.parametrize(
+    "column",
+    ["Open", "High", "Low", "Close", "Volume"],
+)
+def test_load_data_removes_rows_with_missing_values(
+    monkeypatch, column
+):
     """Verify that rows with missing essential values are removed."""
     simulator = MarketSimulator(symbol="RELIANCE")
     sample_data = create_test_data()
 
-    sample_data.loc[0, "Close"] = float("nan")
+    sample_data.loc[0, column] = float("nan")
 
     monkeypatch.setattr(
         pd, "read_csv", lambda _path: sample_data.copy()
@@ -312,7 +318,7 @@ def test_load_data_removes_rows_with_missing_values(monkeypatch):
     data = simulator.load_data()
 
     assert len(data) == 1
-    assert data["Close"].notna().all()
+    assert data[column].notna().all()
     assert set(data["Symbol"]) == {"RELIANCE"}
 
 
