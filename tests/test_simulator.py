@@ -243,3 +243,46 @@ def test_generate_random_orders_yields_to_event_loop():
         assert background_task_ran
 
     asyncio.run(run_test())
+@pytest.mark.parametrize("initial_price", [0, -100])
+def test_generate_random_orders_rejects_invalid_initial_price(
+    initial_price,
+):
+    async def run_test():
+        simulator = MarketSimulator()
+
+        with pytest.raises(
+            ValueError, match="initial_price must be positive"
+        ):
+            async for _ in simulator.generate_random_orders(
+                count=10,
+                initial_price=initial_price,
+            ):
+                pass
+
+    asyncio.run(run_test())
+
+
+@pytest.mark.parametrize("delay", [-1, -0.01])
+def test_generate_random_orders_rejects_negative_delay(delay):
+    async def run_test():
+        simulator = MarketSimulator()
+
+        with pytest.raises(ValueError, match="delay cannot be negative"):
+            async for _ in simulator.generate_random_orders(
+                count=10,
+                delay=delay,
+            ):
+                pass
+
+    asyncio.run(run_test())
+
+
+def test_generate_orders_rejects_negative_delay():
+    async def run_test():
+        simulator = MarketSimulator()
+
+        with pytest.raises(ValueError, match="delay cannot be negative"):
+            async for _ in simulator.generate_orders(delay=-1):
+                pass
+
+    asyncio.run(run_test())
