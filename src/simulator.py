@@ -18,9 +18,15 @@ class MarketSimulator:
     def load_data(self):
         self.market_data = pd.read_csv(self.dataset_path)
 
-        self.market_data["Date"] = pd.to_datetime(
-            self.market_data["Date"]
-        )
+        try:
+            self.market_data["Date"] = pd.to_datetime(
+                self.market_data["Date"],
+                errors="raise"
+            )
+        except (ValueError, TypeError) as error:
+            raise ValueError(
+                "Historical dataset contains invalid date values."
+            ) from error
 
         self.market_data = self.market_data[
             self.market_data["Symbol"] == self.symbol

@@ -372,3 +372,22 @@ def test_load_data_removes_rows_with_missing_dates(monkeypatch):
     assert len(data) == 1
     assert data["Date"].notna().all()
     assert set(data["Symbol"]) == {"RELIANCE"}
+
+
+def test_load_data_provides_clear_invalid_date_error(monkeypatch):
+    """Verify that invalid dates produce a clear error message."""
+    simulator = MarketSimulator(symbol="RELIANCE")
+    sample_data = create_test_data()
+    sample_data.loc[0, "Date"] = "invalid-date"
+
+    monkeypatch.setattr(
+        pd,
+        "read_csv",
+        lambda _path: sample_data.copy()
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Historical dataset contains invalid date values."
+    ):
+        simulator.load_data()
